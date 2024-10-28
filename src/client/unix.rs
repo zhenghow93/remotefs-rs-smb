@@ -255,7 +255,8 @@ impl RemoteFs for SmbFs {
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::IoError, e))
     }
 
-    fn open_file(&mut self, path: &Path, mut dest: Box<dyn Write + Send>) -> RemoteResult<u64> {
+    fn open_file(&mut self, path: &Path) -> RemoteResult<(u64, Vec<u8>)> {
+        let mut dest = vec![];
         self.check_connection()?;
         let path = self.get_uri(path);
         trace!("opening file at {} for read", path);
@@ -263,7 +264,9 @@ impl RemoteFs for SmbFs {
             .client
             .open_with(path, SmbOpenOptions::default().read(true))
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::CouldNotOpenFile, e))?;
-        io::copy(&mut file, &mut dest).map_err(|e| RemoteError::new_ex(RemoteErrorType::IoError, e))
+        io::copy(&mut file, &mut dest)
+            .map_err(|e| RemoteError::new_ex(RemoteErrorType::IoError, e))
+            .map(|res| (res, dest))
     }
 
     fn append(&mut self, _path: &Path, _metadata: &Metadata) -> RemoteResult<WriteStream> {
@@ -280,14 +283,12 @@ impl RemoteFs for SmbFs {
 }
 
 #[cfg(test)]
+#[cfg(feature = "with-containers")]
 mod test {
 
-    #[cfg(feature = "with-containers")]
     use std::io::Cursor;
-    #[cfg(feature = "with-containers")]
     use std::time::Duration;
 
-    #[cfg(feature = "with-containers")]
     use serial_test::serial;
 
     use super::*;
